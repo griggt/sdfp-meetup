@@ -1,0 +1,12 @@
+# F#
+.ionide/
+.fake
+
+# Scala
+.metals/
+.bloop/
+target/
+*.class
+
+# IntelliJ
+.idea/
