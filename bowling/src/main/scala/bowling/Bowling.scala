@@ -5,53 +5,94 @@
 
 package bowling
 
-object Bowling {
-  case class Roll(score: Int)
+case class Roll(pins: Int)
 
-  sealed trait Frame
-  object Strike extends Frame
-  case class Spare(firstRoll: Roll) extends Frame
-  case class Missed(first: Roll, second: Roll) extends Frame
+sealed trait Frame {
+  val numRolls: Int
+  val numBonusRolls: Int
+  def baseScore: Int
+}
+
+case object Strike extends Frame {
+  override val numRolls = 1
+  override val numBonusRolls = 2
+  override val baseScore = 10
+}
+
+case class Spare(firstRoll: Roll) extends Frame {
+  override val numRolls = 2
+  override val numBonusRolls = 1
+  override val baseScore = 10
+}
+
+case class Missed(first: Roll, second: Roll) extends Frame {
+  override val numRolls = 2
+  override val numBonusRolls = 0
+  override def baseScore: Int = first.pins + second.pins
+}
+
+object Bowling {
 
   def score(frames: List[Frame], bonus: List[Roll]): Int = {
-    val allRolls = frames.flatMap {
-      _ match {
-        case Missed(s1, s2) => List(s1, s2)
-        case Spare(s) => List(s, Roll(10 - s.score))
-        case Strike => List(Roll(10))
-      }
-    } ++ bonus
 
-    def score_frame(f: Frame, rollsFromHere: List[Roll]): (Int, List[Roll]) = f match {
-      case Missed(s1, s2) =>
-        val remaining = rollsFromHere.drop(2)
-        (s1.score + s2.score, remaining)
-      case Spare(_) =>
-        val remaining = rollsFromHere.drop(2)
-        (10 + remaining.head.score, remaining)
-      case Strike =>
-        val remaining = rollsFromHere.drop(1)
-        (10 + remaining.head.score + remaining.tail.head.score, remaining)
+    def scoreFrame(frame: Frame, rolls: List[Roll]): (Int, List[Roll]) = {
+      val futureRolls = rolls drop frame.numRolls
+      val bonusScore = futureRolls.take(frame.numBonusRolls).map(_.pins).sum
+      (frame.baseScore + bonusScore, futureRolls)
     }
 
-    def score_helper(framesHelper: List[Frame], rolls: List[Roll], acc: Int): Int =
-      framesHelper match {
+    def scoreRecursive(remainingFrames: List[Frame], rolls: List[Roll], acc: Int): Int =
+      remainingFrames match {
         case Nil => acc
-        case h::t =>
-          val (frame_score, remaining) = score_frame(h, rolls)
-          score_helper(t, remaining, acc + frame_score)
+        case f::fs =>
+          val (frameScore, futureRolls) = scoreFrame(f, rolls)
+          scoreRecursive(fs, futureRolls, acc + frameScore)
       }
 
-    score_helper(frames, allRolls, 0)
+    val allRolls = (frames flatMap {
+      case Strike => List(Roll(10))
+      case Spare(r) => List(r, Roll(10 - r.pins))
+      case Missed(r1, r2) => List(r1, r2)
+    }) ++ bonus
+
+    scoreRecursive(frames, allRolls, 0)
   }
 
-  def main(args: Array[String]): Unit = {
-    val test1 = (List.fill(10)(Strike), List.fill(2)(Roll(10)))
-    val test2 = (List.fill(10)(Missed(Roll(9),Roll(0))), Nil)
-    val test3 = (List.fill(10)(Spare(Roll(5))), List(Roll(5)))
+  // Parsing string input
 
-    println(score(test1._1, test1._2))
-    println(score(test2._1, test2._2))
-    println(score(test3._1, test3._2))
+  def rollValue(s: String): Roll = s match {
+    case "-" => Roll(0)
+    case "X" => Roll(10)
+    case _ => Roll(s.toInt)
   }
+
+  private val StrikeRE = "X".r
+  private val SpareRE  = "([1-9-])/".r
+  private val MissedRE = "([1-9-])([1-9-])".r
+
+  private val SpareBonusRE = "([1-9-])/([X1-9-])".r
+  private val StrikeBonusRE = "X([X1-9-])([X1-9-])".r
+  private val StrikeBonusSpareRE = "X([1-9-])/".r
+
+  def parseSingleFrame(s: String): (Frame, List[Roll]) = s match {
+    case StrikeRE() => (Strike, Nil)
+    case SpareRE(r1) => (Spare(rollValue(r1)), Nil)
+    case MissedRE(r1, r2) => (Missed(rollValue(r1), rollValue(r2)), Nil)
+    case SpareBonusRE(r1, b1) => (Spare(rollValue(r1)), List(rollValue(b1)))
+    case StrikeBonusRE(b1, b2) => (Strike, List(rollValue(b1), rollValue(b2)))
+    case StrikeBonusSpareRE(b1) =>
+      val r1 = rollValue(b1)
+      (Strike, List(r1, Roll(10 - r1.pins)))
+  }
+
+  def parseAllFrames(s: String): (List[Frame], List[Roll]) = {
+    val (frames, bonusNested) = s.split(' ').toList.map(parseSingleFrame).unzip
+    (frames, bonusNested.flatten)
+  }
+
+  def score(s: String): Int = {
+    val (frames, bonus) = parseAllFrames(s)
+    score(frames, bonus)
+  }
+
 }
