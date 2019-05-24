@@ -13,17 +13,36 @@ case class Cell(state: State, x: Int, y: Int)
 
 case class Grid(numRows: Int, cells: Array[Cell]) {
   val numCols: Int = cells.length / numRows
-}
 
-object Life {
-  def transition(grid: Grid): Grid =
-    Grid(grid.numRows, grid.cells map { cellTransition(grid, _) })
+  // Cell data is stored in row-major order
+  def cell(x: Int, y: Int): Option[Cell] = {
+    if (x < 0 || x >= numCols || y < 0 || y >= numRows) None
+    else Some(cells(y * numCols + x))
+  }
 
-  def cellTransition(grid: Grid, cell: Cell): Cell =
-    Cell(cellNextState(grid, cell), cell.x, cell.y)
+  def neighbors(c: Cell): List[Cell] = {
+    val x = c.x
+    val y = c.y
 
-  def cellNextState(grid: Grid, cell: Cell): State =
-    (cell.state, liveNeighbors(grid, cell)) match {
+    val north = cell(x, y - 1)
+    val south = cell(x, y + 1)
+    val east = cell(x + 1, y)
+    val west = cell(x - 1, y)
+
+    val nw = cell(x - 1, y - 1)
+    val ne = cell(x + 1, y - 1)
+    val sw = cell(x - 1, y + 1)
+    val se = cell(x + 1, y + 1)
+
+    List(north, south, east, west, nw, ne, sw, se).flatten
+  }
+
+  def isAlive(cell: Cell): Boolean = cell.state == Alive
+
+  def liveNeighborCount(cell: Cell): Int = neighbors(cell) count isAlive
+
+  def cellNextState(cell: Cell): State =
+    (cell.state, liveNeighborCount(cell)) match {
       case (Alive, n) if n < 2  => Dead
       case (Alive, n) if n <= 3 => Alive
       case (Alive, _)           => Dead
@@ -31,33 +50,11 @@ object Life {
       case (Dead, _)            => Dead
     }
 
-  def liveNeighbors(grid: Grid, cell: Cell): Int = neighbors(grid, cell) count isAlive
+  def cellTransition(cell: Cell): Cell = Cell(cellNextState(cell), cell.x, cell.y)
 
-  def isAlive(cell: Cell): Boolean = cell.state == Alive
-
-  // Cell data is stored in row-major order
-  def cell(grid: Grid, x: Int, y: Int): Option[Cell] = {
-    if (x < 0 || x >= grid.numCols || y < 0 || y >= grid.numRows) None
-    else Some(grid.cells(y * grid.numCols + x))
-  }
-
-  def neighbors(grid: Grid, c: Cell): List[Cell] = {
-    val x = c.x
-    val y = c.y
-
-    val north = cell(grid, x, y - 1)
-    val south = cell(grid, x, y + 1)
-    val east = cell(grid, x + 1, y)
-    val west = cell(grid, x - 1, y)
-
-    val nw = cell(grid, x - 1, y - 1)
-    val ne = cell(grid, x + 1, y - 1)
-    val sw = cell(grid, x - 1, y + 1)
-    val se = cell(grid, x + 1, y + 1)
-
-    List(north, south, east, west, nw, ne, sw, se).flatten
-  }
+  def transition(): Grid = Grid(numRows, cells map cellTransition)
 }
+
 
 /// TESTING
 
@@ -130,7 +127,7 @@ object LifeApp extends App {
 
     println("---")
 
-    val n = Life.transition(g)
+    val n = g.transition()
     n.cells map println
 
   }
