@@ -5,71 +5,66 @@
 import scala.util.Random
 
 object Mastermind extends App {
-
-
   sealed trait Color
   case object Red extends Color
   case object Green extends Color
-  case object Blue extends  Color
+  case object Blue extends Color
   case object Yellow extends Color
 
   type Code = List[Color]
   type History = List[(Code, Int, Int)]
 
+  final val MAX_GUESSES = 12
+
   val allColors = List(Red, Green, Blue, Yellow)
 
-  def checkGuess(guess: Code, actual: Code): (Int, Int) = {
-    val exact = guess.zip(actual).count {case (x,y) => x == y}
-    val mismatches = guess.zip(actual).filter { case (x,y) => x != y }
-    val (gm, am) = mismatches.unzip
-    val gmcount = gm.groupBy{x => x}.toList.map{case(k, v) => (k, v.length)}.toMap
-    val amcount = am.groupBy{x => x}.toList.map{case(k, v) => (k, v.length)}.toMap
+  def evaluate(guess: Code, actual: Code): (Int, Int) = {
+    def counts[T](s: List[T]) = s.groupBy(x => x).view.mapValues(_.length)
+    def colorCount(code: Code, color: Color) = counts(code).getOrElse(color, 0)
+    def matchingColorCount(c1: Code, c2: Code)(color: Color) = math.min(colorCount(c1, color), colorCount(c2, color))
 
-    val colorMatchCount = allColors.map{col => math.min(gmcount.getOrElse(col,0), amcount.getOrElse(col,0))}.sum
+    val zipped = guess.zip(actual)
+    val mismatches = zipped.filter { case (x, y) => x != y }
+    val countColorMatches = (matchingColorCount _).tupled(mismatches.unzip)
 
+    val exactMatchCount = zipped.count { case (x, y) => x == y }
+    val colorMatchCount = allColors.map(countColorMatches).sum
 
-    (exact, colorMatchCount)
+    (exactMatchCount, colorMatchCount)
   }
 
-  def randomGuess(): Code = {
-    val g1 = allColors(Random.nextInt(4))
-    val g2 = allColors(Random.nextInt(4))
-    val g3 = allColors(Random.nextInt(4))
-    val g4 = allColors(Random.nextInt(4))
-    List(g1, g2, g3, g4)
-  }
+  def randomColor: Color = allColors(Random.nextInt(4))
+
+  def randomGuess(): Code = List.fill(4)(randomColor)
 
   def refineGuess(history: History): Code = history match {
     case Nil => randomGuess()
     case _ => randomGuess()
   }
 
-  ////////
+  def play(code: Code, history: History): (Boolean, History) = history.length match {
+    case MAX_GUESSES => (false, history)
+    case _ =>
+      val guess = refineGuess(history)
+      val (exactMatches, colorMatches) = evaluate(guess, code)
+
+      if (exactMatches == code.length)
+        (true, history)
+      else
+        play(code, (guess, exactMatches, colorMatches) :: history)
+  }
+
+  //////// TESTING
 
   //Random.setSeed(1)
 
-  //val testCode = List(Red, Red, Green, Yellow)
-  val testCode = List(Blue, Red, Green, Green)
-
+  val testCode = List(Red, Red, Green, Yellow)
+  //val testCode = List(Blue, Red, Green, Green)
   val testGuess = List(Red, Green, Blue, Red)
-  val (e, c) = checkGuess(testGuess, testCode)
-  //Console.println(e, c)
+  val (e, c) = evaluate(testGuess, testCode)
+  println(e, c)
 
-  def play(code: Code, history: History): (Boolean, History) = {
-    if (history.length == 12)
-      (false, history)
-    else {
-      val guess = refineGuess(history)
-      val (e,c) = checkGuess(guess, code)
-      if (e == 4)
-        (true, history)
-      else
-      {
-        play(code, (guess, e, c)::history)
-      }
-    }
-  }
+  // Test game play
 
-  Console.println(play(testCode, Nil))
-
+  println(play(testCode, Nil))
 }
