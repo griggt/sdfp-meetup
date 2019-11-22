@@ -6,9 +6,9 @@ use "promises"
 primitive Correct
 primitive TooLow
 primitive TooHigh
-primitive InvalidInput
+primitive Invalid
 
-type GuessState is (Correct | TooLow | TooHigh | InvalidInput)
+type GuessState is (Correct | TooLow | TooHigh | Invalid)
 
 class Oracle
   var _secret: U64
@@ -25,21 +25,21 @@ class Oracle
         | let guess: U64 if guess < _secret => TooLow
         | let guess: U64 if guess > _secret => TooHigh
       else
-        InvalidInput
+        Invalid
       end
     else
-      InvalidInput
+      Invalid
     end
 
   fun secret(): U64 =>
     _secret
 
-class Handler is ReadlineNotify
+class UIHandler is ReadlineNotify
   var _out: OutStream
-  var _orc: Oracle
+  var _orc: Oracle val
   var _i: U64 = 0
 
-  new create(orc: Oracle, out: OutStream)  =>
+  new create(orc: Oracle val, out: OutStream) =>
     _out = out
     _orc = orc
 
@@ -53,20 +53,18 @@ class Handler is ReadlineNotify
               let plural = if _i > 1 then "es" else "" end
               _out.print("You guessed it! (" + _i.string() + " guess" + plural + ")")
               prompt.reject()
-          | TooLow =>  prompt("Too low, guess again > ")
+          | TooLow => prompt("Too low, guess again > ")
           | TooHigh => prompt("Too high, guess again > ")
-          | InvalidInput => prompt("That's not an unsigned 64-bit int, guess again > ")
+          | Invalid => prompt("That's not an unsigned 64-bit int, guess again > ")
         end
     end
 
-
 actor Main
   new create(env: Env) =>
-    let orc: Oracle iso = recover Oracle(100) end
+    let orc = recover val Oracle(100) end
     env.out.print("(Hint: the number is " + orc.secret().string() + ")")
 
-    // Building a delegate manually
-    let handler: ReadlineNotify iso = recover Handler(consume orc, env.out) end
+    let handler = recover UIHandler(orc, env.out) end
     let term = ANSITerm(Readline(consume handler, env.out), env.input)
     term.prompt("Guess > ")
 
